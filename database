@@ -1,0 +1,4 @@
+user1 = {'id':'ashish', 'password':'asdf'}
+user2 = {'id':'ankit', 'password':'qwer'}
+
+users = [user1, user2]
