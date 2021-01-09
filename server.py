@@ -4,10 +4,25 @@ import threading
 
 Header_size = 5
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.bind(('127.0.0.1', 1234))
+ip_address = input("please enter the ip address:")
+ip_address = ip_address.strip()
+port = int(input("please input port number:"))
+s.bind((ip_address, port))
 s.listen(4)
-
+print("server is listening...")
 clients = []
+
+def handle_command(data, cli):
+	msg = extract_msg(data).strip()
+	msg = msg[1:]
+	msg = msg.strip()
+	if (msg == "quit"):
+		cli.close()
+		clients.remove(cli)
+	if (msg == "ping"):
+		cli.send(crt_msg("hi", "server"))
+
+
 
 def broadcast_data(cli, data):
 	msg = data
@@ -15,16 +30,31 @@ def broadcast_data(cli, data):
 		if c != cli or not cli:
 			c.sendall(data)
 	
+def extract_msg(msg):
+	msg = msg.decode()
+	msg = msg.split("|msg|")[1]
+	return msg
 
-def crt_msg(msg):
-	l = len(msg)
+def extract_user_name(msg):
+	msg = msg.decode()
+	user_name = msg.split("|usr|")[1]
+	return user_name
+
+def extract_len_msg(msg):
+	msg = msg.decode()
+	l = msg.split("|len|")[1]
+	return int(l)
+
+
+def crt_msg(msg, usr_name):
+	l = len(msg) +  2*len("|len|") + 2*len("|usr|") + 2*len("|msg|") + Header_size + len(usr_name)
 	s = str(l)
 	while len(s) < Header_size:
 		s = '0' + s
-		
-	header = '|len|'+s + '|len||usr|'+ usr +"|usr|"+ "|strt|"	
+
+	header = '|len|'+s + '|len||usr|'+ usr_name +"|usr|"+ "|msg|"	
 	msg = header + msg
-	m = msg + "|end|"
+	m = msg + "|msg|"
 	m = bytes(m, 'utf-8')
 	return m
 	
@@ -41,16 +71,31 @@ def new_connection():
 def listen_msgs(cli):
 	global s, clients
 	
-	while True:
-		data = str(cli.recv(100))
-		data_len = data.split('|len|')[1]
-		print("data length is {data_len}")
-		data_len = int(data_len)
-		while len(data) < data_len:
-			data = data + str(cli.recv(100))
-		print("received data from a client")
-		broadcast_data(cli, bytes(data, "utf-8"))
-		time.sleep(1)
+	try:
+		while True:
+			data = cli.recv(100)
+			print(data)
+			data_len = extract_len_msg(data)
+			print("data length is {}".format(data_len))
+			while len(data) < data_len:
+				temp = cli.recv(100).decode()
+				data = data + temp
+				#print("data inside the second while loop")
+				#print(temp)
+				#print(len(data))
+			print("------------------------------------------------------------------")
+			msg = extract_msg(data).strip()
+			if msg[0] == ":":
+				handle_command(data, cli)
+			else:
+				broadcast_data(cli, data)
+			time.sleep(0.1)
+	except Exception as e:
+		print("client disconnceted due to following error: {}".format(str(e)))
+		clients.remove(cli)
+		print(len(clients))
+		
+
 t1 = threading.Thread(target= new_connection)
 t1.start()
 
